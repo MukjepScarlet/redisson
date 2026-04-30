@@ -17,6 +17,7 @@ package org.redisson.connection;
 
 import io.netty.buffer.ByteBufUtil;
 import io.netty.channel.EventLoopGroup;
+import io.netty.channel.MultiThreadIoEventLoopGroup;
 import io.netty.channel.epoll.EpollDatagramChannel;
 import io.netty.channel.epoll.EpollDomainSocketChannel;
 import io.netty.channel.epoll.EpollEventLoopGroup;
@@ -29,9 +30,9 @@ import io.netty.channel.nio.NioEventLoopGroup;
 import io.netty.channel.socket.DuplexChannel;
 import io.netty.channel.socket.nio.NioDatagramChannel;
 import io.netty.channel.socket.nio.NioSocketChannel;
-import io.netty.incubator.channel.uring.IOUringDatagramChannel;
-import io.netty.incubator.channel.uring.IOUringEventLoopGroup;
-import io.netty.incubator.channel.uring.IOUringSocketChannel;
+import io.netty.channel.uring.IoUringDatagramChannel;
+import io.netty.channel.uring.IoUringIoHandler;
+import io.netty.channel.uring.IoUringSocketChannel;
 import io.netty.resolver.AddressResolver;
 import io.netty.resolver.AddressResolverGroup;
 import io.netty.resolver.DefaultAddressResolverGroup;
@@ -218,8 +219,8 @@ public final class ServiceManager {
                 this.group = cfg.getEventLoopGroup();
             }
 
-            this.socketChannelClass = IOUringSocketChannel.class;
-            this.resolverGroup = cfg.getAddressResolverGroupFactory().create(IOUringDatagramChannel.class, IOUringSocketChannel.class, DnsServerAddressStreamProviders.platformDefault());
+            this.socketChannelClass = IoUringSocketChannel.class;
+            this.resolverGroup = cfg.getAddressResolverGroupFactory().create(IoUringDatagramChannel.class, IoUringSocketChannel.class, DnsServerAddressStreamProviders.platformDefault());
         } else {
             if (cfg.getEventLoopGroup() == null) {
                 if (cfg.getNettyExecutor() != null) {
@@ -273,7 +274,7 @@ public final class ServiceManager {
 
     // for Quarkus substitution
     private static EventLoopGroup createIOUringGroup(Config cfg) {
-        return new IOUringEventLoopGroup(cfg.getNettyThreads(), new DefaultThreadFactory("redisson-netty"));
+        return new MultiThreadIoEventLoopGroup(cfg.getNettyThreads(), new DefaultThreadFactory("redisson-netty"), IoUringIoHandler.newFactory());
     }
 
     private void initTimer() {
