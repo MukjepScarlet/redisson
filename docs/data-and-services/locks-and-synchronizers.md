@@ -85,6 +85,103 @@ Code examples:
     .subscribe();
     ```
 
+## Non-Reentrant Lock
+Valkey or Redis based distributed non-reentrant [Lock](https://static.javadoc.io/org.redisson/redisson/latest/org/redisson/api/RLock.html) object for Java and implements [Lock](https://docs.oracle.com/javase/8/docs/api/java/util/concurrent/locks/Lock.html) interface.
+
+Unlike the regular [Lock](#lock), a thread that already holds the lock cannot acquire it again. Any attempt to re-acquire from the same thread &mdash; whether via `lock()`, `tryLock()`, or `tryLock(waitTime, unit)` &mdash; throws `IllegalMonitorStateException` immediately. This is useful for catching programmer errors in code paths that should never be reentered while the lock is held. Other threads contend for the lock as usual.
+
+If Redisson instance which acquired lock crashes then such lock could hang forever in acquired state. To avoid this Redisson maintains lock watchdog, it prolongs lock expiration while lock holder Redisson instance is alive. By default lock watchdog timeout is 30 seconds and can be changed through [Config.lockWatchdogTimeout](../configuration.md) setting.
+
+`leaseTime` parameter during lock acquisition can be defined. After specified time interval locked lock will be released automatically.
+
+Only the lock owner thread can unlock the lock; otherwise `IllegalMonitorStateException` is thrown &mdash; the same as for the regular [Lock](#lock).
+
+Code examples:
+
+=== "Sync"
+    ```
+    RLock lock = redisson.getNonReentrantLock("myLock");
+
+    // traditional lock method
+    lock.lock();
+
+    // a second acquire from the same thread throws IllegalMonitorStateException
+    // lock.lock();
+
+    // or acquire lock and automatically unlock it after 10 seconds
+    lock.lock(10, TimeUnit.SECONDS);
+
+    // or wait for lock acquisition up to 100 seconds
+    // and automatically unlock it after 10 seconds
+    boolean res = lock.tryLock(100, 10, TimeUnit.SECONDS);
+    if (res) {
+       try {
+         ...
+       } finally {
+           lock.unlock();
+       }
+    }
+    ```
+=== "Async"
+    ```
+    RLock lock = redisson.getNonReentrantLock("myLock");
+
+    RFuture<Void> lockFuture = lock.lockAsync();
+
+    // or acquire lock and automatically unlock it after 10 seconds
+    RFuture<Void> lockFuture = lock.lockAsync(10, TimeUnit.SECONDS);
+
+    // or wait for lock acquisition up to 100 seconds
+    // and automatically unlock it after 10 seconds
+    RFuture<Boolean> lockFuture = lock.tryLockAsync(100, 10, TimeUnit.SECONDS);
+
+    lockFuture.whenComplete((res, exception) -> {
+        // exception is IllegalMonitorStateException (wrapped in CompletionException)
+        // if the calling thread already holds this lock
+        // ...
+        lock.unlockAsync();
+    });
+    ```
+=== "Reactive"
+    ```
+    RedissonReactiveClient redisson = redissonClient.reactive();
+    RLockReactive lock = redisson.getNonReentrantLock("myLock");
+
+    Mono<Void> lockMono = lock.lock();
+
+    // or acquire lock and automatically unlock it after 10 seconds
+    Mono<Void> lockMono = lock.lock(10, TimeUnit.SECONDS);
+
+    // or wait for lock acquisition up to 100 seconds
+    // and automatically unlock it after 10 seconds
+    Mono<Boolean> lockMono = lock.tryLock(100, 10, TimeUnit.SECONDS);
+
+    lockMono.doOnNext(res -> {
+        // ...
+    })
+    .doFinally(signalType -> lock.unlock().subscribe())
+    .subscribe();
+    ```
+=== "RxJava3"
+    ```
+    RedissonRxClient redisson = redissonClient.rxJava();
+    RLockRx lock = redisson.getNonReentrantLock("myLock");
+
+    Completable lockRes = lock.lock();
+
+    // or acquire lock and automatically unlock it after 10 seconds
+    Completable lockRes = lock.lock(10, TimeUnit.SECONDS);
+
+    // or wait for lock acquisition up to 100 seconds
+    // and automatically unlock it after 10 seconds
+    Single<Boolean> lockRes = lock.tryLock(100, 10, TimeUnit.SECONDS);
+
+    lockRes.doOnSuccess(res -> {
+        // ...
+    })
+    .doFinally(() -> lock.unlock().subscribe())
+    .subscribe();
+    ```
 
 ## Fair Lock
 Valkey or Redis based distributed reentrant fair [Lock](https://static.javadoc.io/org.redisson/redisson/latest/org/redisson/api/RLock.html) object for Java implements [Lock](https://docs.oracle.com/javase/8/docs/api/java/util/concurrent/locks/Lock.html) interface. 
@@ -171,6 +268,106 @@ Code examples:
     Completable lockRes = lock.lock(10, TimeUnit.SECONDS, threadId);
 
     // or wait for lock acquisition up to 100 seconds 
+    // and automatically unlock it after 10 seconds
+    Single<Boolean> lockRes = lock.tryLock(100, 10, TimeUnit.SECONDS, threadId);
+
+    lockRes.doOnSuccess(res -> {
+       // ...
+    })
+    .doFinally(() -> lock.unlock(threadId).subscribe())
+    .subscribe();
+    ```
+
+## Non-Reentrant Fair Lock
+Valkey or Redis based distributed non-reentrant fair [Lock](https://static.javadoc.io/org.redisson/redisson/latest/org/redisson/api/RLock.html) object for Java implements [Lock](https://docs.oracle.com/javase/8/docs/api/java/util/concurrent/locks/Lock.html) interface.
+
+Acquisition order is FIFO across all Redisson instances, the same as the regular [Fair Lock](#fair-lock) &mdash; all waiting threads are queued and if some thread has died Redisson waits its return for 5 seconds. Unlike the regular Fair Lock, a thread that already holds the lock cannot acquire it again. Any attempt to re-acquire from the same thread &mdash; whether via `lock()`, `tryLock()`, or `tryLock(waitTime, unit)` &mdash; throws `IllegalMonitorStateException` immediately. Other threads contend via the fair queue as usual.
+
+If Redisson instance which acquired lock crashes then such lock could hang forever in acquired state. To avoid this Redisson maintains lock watchdog, it prolongs lock expiration while lock holder Redisson instance is alive. By default lock watchdog timeout is 30 seconds and can be changed through [Config.lockWatchdogTimeout](../configuration.md) setting.
+
+`leaseTime` parameter during lock acquisition can be defined. After specified time interval locked lock will be released automatically.
+
+Only the lock owner thread can unlock the lock; otherwise `IllegalMonitorStateException` is thrown &mdash; the same as for the regular [Fair Lock](#fair-lock).
+
+Code examples:
+
+=== "Sync"
+    ```
+    RLock lock = redisson.getNonReentrantFairLock("myLock");
+
+    // traditional lock method
+    lock.lock();
+
+    // a second acquire from the same thread throws IllegalMonitorStateException
+    // lock.lock();
+
+    // or acquire lock and automatically unlock it after 10 seconds
+    lock.lock(10, TimeUnit.SECONDS);
+
+    // or wait for lock acquisition up to 100 seconds
+    // and automatically unlock it after 10 seconds
+    boolean res = lock.tryLock(100, 10, TimeUnit.SECONDS);
+    if (res) {
+       try {
+         ...
+       } finally {
+           lock.unlock();
+       }
+    }
+    ```
+=== "Async"
+    ```
+    RLock lock = redisson.getNonReentrantFairLock("myLock");
+
+    RFuture<Void> lockFuture = lock.lockAsync();
+
+    // or acquire lock and automatically unlock it after 10 seconds
+    RFuture<Void> lockFuture = lock.lockAsync(10, TimeUnit.SECONDS);
+
+    // or wait for lock acquisition up to 100 seconds
+    // and automatically unlock it after 10 seconds
+    RFuture<Boolean> lockFuture = lock.tryLockAsync(100, 10, TimeUnit.SECONDS);
+
+    lockFuture.whenComplete((res, exception) -> {
+        // exception is IllegalMonitorStateException (wrapped in CompletionException)
+        // if the calling thread already holds this lock
+        // ...
+        lock.unlockAsync();
+    });
+    ```
+=== "Reactive"
+    ```
+    RedissonReactiveClient redisson = redissonClient.reactive();
+    RLockReactive lock = redisson.getNonReentrantFairLock("myLock");
+
+    long threadId = Thread.currentThread().getId();
+    Mono<Void> lockMono = lock.lock(threadId);
+
+    // or acquire lock and automatically unlock it after 10 seconds
+    Mono<Void> lockMono = lock.lock(10, TimeUnit.SECONDS, threadId);
+
+    // or wait for lock acquisition up to 100 seconds
+    // and automatically unlock it after 10 seconds
+    Mono<Boolean> lockMono = lock.tryLock(100, 10, TimeUnit.SECONDS, threadId);
+
+    lockMono.doOnSuccess(res -> {
+       // ...
+    })
+    .doFinally(r -> lock.unlock(threadId).subscribe())
+    .subscribe();
+    ```
+=== "RxJava3"
+    ```
+    RedissonRxClient redisson = redissonClient.rxJava();
+    RLockRx lock = redisson.getNonReentrantFairLock("myLock");
+
+    long threadId = Thread.currentThread().getId();
+    Completable lockRes = lock.lock(threadId);
+
+    // or acquire lock and automatically unlock it after 10 seconds
+    Completable lockRes = lock.lock(10, TimeUnit.SECONDS, threadId);
+
+    // or wait for lock acquisition up to 100 seconds
     // and automatically unlock it after 10 seconds
     Single<Boolean> lockRes = lock.tryLock(100, 10, TimeUnit.SECONDS, threadId);
 
@@ -802,104 +999,6 @@ Code examples:
        // ...
     })
     .doFinally(() -> lock.unlock(threadId).subscribe())
-    .subscribe();
-    ```
-
-## Non-Reentrant Lock
-Valkey or Redis based distributed non-reentrant [Lock](https://static.javadoc.io/org.redisson/redisson/latest/org/redisson/api/RLock.html) object for Java and implements [Lock](https://docs.oracle.com/javase/8/docs/api/java/util/concurrent/locks/Lock.html) interface.
-
-Unlike the regular [Lock](#lock), a thread that already holds the lock cannot acquire it again. Any attempt to re-acquire from the same thread &mdash; whether via `lock()`, `tryLock()`, or `tryLock(waitTime, unit)` &mdash; throws `IllegalMonitorStateException` immediately. This is useful for catching programmer errors in code paths that should never be reentered while the lock is held. Other threads contend for the lock as usual.
-
-If Redisson instance which acquired lock crashes then such lock could hang forever in acquired state. To avoid this Redisson maintains lock watchdog, it prolongs lock expiration while lock holder Redisson instance is alive. By default lock watchdog timeout is 30 seconds and can be changed through [Config.lockWatchdogTimeout](../configuration.md) setting.
-
-`leaseTime` parameter during lock acquisition can be defined. After specified time interval locked lock will be released automatically.
-
-Only the lock owner thread can unlock the lock; otherwise `IllegalMonitorStateException` is thrown &mdash; the same as for the regular [Lock](#lock).
-
-Code examples:
-
-=== "Sync"
-    ```
-    RLock lock = redisson.getNonReentrantLock("myLock");
-
-    // traditional lock method
-    lock.lock();
-
-    // a second acquire from the same thread throws IllegalMonitorStateException
-    // lock.lock();
-
-    // or acquire lock and automatically unlock it after 10 seconds
-    lock.lock(10, TimeUnit.SECONDS);
-
-    // or wait for lock acquisition up to 100 seconds
-    // and automatically unlock it after 10 seconds
-    boolean res = lock.tryLock(100, 10, TimeUnit.SECONDS);
-    if (res) {
-       try {
-         ...
-       } finally {
-           lock.unlock();
-       }
-    }
-    ```
-=== "Async"
-    ```
-    RLock lock = redisson.getNonReentrantLock("myLock");
-
-    RFuture<Void> lockFuture = lock.lockAsync();
-
-    // or acquire lock and automatically unlock it after 10 seconds
-    RFuture<Void> lockFuture = lock.lockAsync(10, TimeUnit.SECONDS);
-
-    // or wait for lock acquisition up to 100 seconds
-    // and automatically unlock it after 10 seconds
-    RFuture<Boolean> lockFuture = lock.tryLockAsync(100, 10, TimeUnit.SECONDS);
-
-    lockFuture.whenComplete((res, exception) -> {
-        // exception is IllegalMonitorStateException (wrapped in CompletionException)
-        // if the calling thread already holds this lock
-        // ...
-        lock.unlockAsync();
-    });
-    ```
-=== "Reactive"
-    ```
-    RedissonReactiveClient redisson = redissonClient.reactive();
-    RLockReactive lock = redisson.getNonReentrantLock("myLock");
-
-    Mono<Void> lockMono = lock.lock();
-
-    // or acquire lock and automatically unlock it after 10 seconds
-    Mono<Void> lockMono = lock.lock(10, TimeUnit.SECONDS);
-
-    // or wait for lock acquisition up to 100 seconds
-    // and automatically unlock it after 10 seconds
-    Mono<Boolean> lockMono = lock.tryLock(100, 10, TimeUnit.SECONDS);
-
-    lockMono.doOnNext(res -> {
-        // ...
-    })
-    .doFinally(signalType -> lock.unlock().subscribe())
-    .subscribe();
-    ```
-=== "RxJava3"
-    ```
-    RedissonRxClient redisson = redissonClient.rxJava();
-    RLockRx lock = redisson.getNonReentrantLock("myLock");
-
-    Completable lockRes = lock.lock();
-
-    // or acquire lock and automatically unlock it after 10 seconds
-    Completable lockRes = lock.lock(10, TimeUnit.SECONDS);
-
-    // or wait for lock acquisition up to 100 seconds
-    // and automatically unlock it after 10 seconds
-    Single<Boolean> lockRes = lock.tryLock(100, 10, TimeUnit.SECONDS);
-
-    lockRes.doOnSuccess(res -> {
-        // ...
-    })
-    .doFinally(() -> lock.unlock().subscribe())
     .subscribe();
     ```
 
