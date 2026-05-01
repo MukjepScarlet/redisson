@@ -6,6 +6,7 @@ import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.Test;
 import org.redisson.api.RDeque;
 import org.redisson.api.listener.DequeAddFirstListener;
+import org.redisson.api.listener.DequeAddLastListener;
 import org.redisson.api.listener.ListAddListener;
 import org.redisson.api.queue.DequeMoveArgs;
 
@@ -75,6 +76,31 @@ public class RedissonDequeTest extends RedisDockerTest {
             nfs.clear();
             deque.removeListener(id);
             deque.addFirst(3);
+
+            Awaitility.await()
+                    .during(Duration.ofMillis(500))
+                    .atMost(Duration.ofSeconds(1))
+                    .until(nfs::isEmpty);
+        }, NOTIFY_KEYSPACE_EVENTS, "El");
+    }
+
+    @Test
+    public void testAddLastListener() {
+        testWithParams(redisson -> {
+            Queue<Integer> nfs = new ConcurrentLinkedQueue<>();
+            RDeque<Integer> deque = redisson.getDeque("testAddLastListener");
+            deque.add(1);
+
+            int id = deque.addListener((DequeAddLastListener) name -> nfs.add(1));
+
+            deque.addLast(2);
+
+            Awaitility.waitAtMost(Duration.ofSeconds(1))
+                    .untilAsserted(() -> assertThat(nfs).contains(1));
+
+            nfs.clear();
+            deque.removeListener(id);
+            deque.addLast(3);
 
             Awaitility.await()
                     .during(Duration.ofMillis(500))

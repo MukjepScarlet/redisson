@@ -20,6 +20,7 @@ import org.redisson.api.RFuture;
 import org.redisson.api.ObjectListener;
 import org.redisson.api.RedissonClient;
 import org.redisson.api.listener.DequeAddFirstListener;
+import org.redisson.api.listener.DequeAddLastListener;
 import org.redisson.api.queue.DequeMoveArgs;
 import org.redisson.api.queue.DequeMoveParams;
 import org.redisson.client.codec.Codec;
@@ -55,6 +56,9 @@ public class RedissonDeque<V> extends RedissonQueue<V> implements RDeque<V> {
         if (listener instanceof DequeAddFirstListener) {
             return addListener("__keyevent@*:lpush", (DequeAddFirstListener) listener, DequeAddFirstListener::onAddFirst);
         }
+        if (listener instanceof DequeAddLastListener) {
+            return addListener("__keyevent@*:rpush", (DequeAddLastListener) listener, DequeAddLastListener::onAddLast);
+        }
 
         return super.addListener(listener);
     }
@@ -64,19 +68,22 @@ public class RedissonDeque<V> extends RedissonQueue<V> implements RDeque<V> {
         if (listener instanceof DequeAddFirstListener) {
             return addListenerAsync("__keyevent@*:lpush", (DequeAddFirstListener) listener, DequeAddFirstListener::onAddFirst);
         }
+        if (listener instanceof DequeAddLastListener) {
+            return addListenerAsync("__keyevent@*:rpush", (DequeAddLastListener) listener, DequeAddLastListener::onAddLast);
+        }
 
         return super.addListenerAsync(listener);
     }
 
     @Override
     public void removeListener(int listenerId) {
-        removeListener(listenerId, "__keyevent@*:lpush");
+        removeListener(listenerId, "__keyevent@*:lpush", "__keyevent@*:rpush");
         super.removeListener(listenerId);
     }
 
     @Override
     public RFuture<Void> removeListenerAsync(int listenerId) {
-        return removeListenerAsync(super.removeListenerAsync(listenerId), listenerId, "__keyevent@*:lpush");
+        return removeListenerAsync(super.removeListenerAsync(listenerId), listenerId, "__keyevent@*:lpush", "__keyevent@*:rpush");
     }
 
     @Override
