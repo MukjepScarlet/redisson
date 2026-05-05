@@ -173,6 +173,26 @@ public interface RedissonReactiveClient {
     RRateLimiterReactive getRateLimiter(CommonOptions options);
 
     /**
+     * Returns GCRA instance by <code>name</code>.
+     * <p>
+     * Requires Redis 8.8.0 or higher.
+     *
+     * @param name of GCRA object
+     * @return GCRA object
+     */
+    RGcraReactive getGcra(String name);
+
+    /**
+     * Returns GCRA instance with specified <code>options</code>.
+     * <p>
+     * Requires Redis 8.8.0 or higher.
+     *
+     * @param options instance options
+     * @return GCRA object
+     */
+    RGcraReactive getGcra(CommonOptions options);
+
+    /**
      * Returns binary stream holder instance by <code>name</code>
      *
      * @param name of binary stream
